@@ -17,7 +17,7 @@ A lightweight Win32 service for **Windows Phone 8.1** that executes a configurab
 
 ![Example](Capture001.PNG)
 
-**Install the service** (registers it with the SCM, `AUTO_START`):
+**Install the service:**
 
 ```bat
 wp81TimerService.exe install
