@@ -165,6 +165,13 @@ typedef VOID(WINAPI *LPHANDLER_FUNCTION)(
 	DWORD    dwControl
 	);
 
+typedef DWORD(WINAPI *LPHANDLER_FUNCTION_EX)(
+	DWORD   dwControl,
+	DWORD   dwEventType,
+	LPVOID  lpEventData,
+	LPVOID  lpContext
+	);
+
 extern "C" {
 	WINBASEAPI HMODULE WINAPI LoadLibraryExW(LPCWSTR lpLibFileName, HANDLE hFile, DWORD dwFlags);
 	WINBASEAPI HMODULE WINAPI GetModuleHandleW(LPCWSTR lpModuleName);
@@ -176,6 +183,7 @@ extern "C" {
 	WINBASEAPI BOOL WINAPI TerminateProcess(HANDLE hProcess, UINT uExitCode);
 	WINADVAPI BOOL WINAPI SetServiceStatus(SERVICE_STATUS_HANDLE hServiceStatus, LPSERVICE_STATUS lpServiceStatus);
 	WINADVAPI SERVICE_STATUS_HANDLE WINAPI RegisterServiceCtrlHandlerW(LPCWSTR lpServiceName, LPHANDLER_FUNCTION lpHandlerProc);
+	WINADVAPI SERVICE_STATUS_HANDLE WINAPI RegisterServiceCtrlHandlerExW(LPCWSTR lpServiceName, LPHANDLER_FUNCTION_EX lpHandlerProc, LPVOID lpContext);
 	WINBASEAPI HANDLE WINAPI CreateEventW(LPSECURITY_ATTRIBUTES lpEventAttributes, BOOL bManualReset, BOOL bInitialState, LPCWSTR lpName);
 	WINBASEAPI DWORD WINAPI GetModuleFileNameW(HMODULE hModule, LPWSTR lpFilename, DWORD nSize);
 	WINADVAPI SC_HANDLE WINAPI OpenSCManagerW(LPCWSTR lpMachineName, LPCWSTR lpDatabaseName, DWORD dwDesiredAccess);
@@ -204,7 +212,7 @@ class Win32Api {
 private:
 	// Returns a base address of KernelBase.dll
 	static HMODULE GetKernelBase() {
-		return GetBaseAddress(&::DisableThreadLibraryCalls);
+		return GetBaseAddress(reinterpret_cast<void*>(&::DisableThreadLibraryCalls));
 	}
 
 	// Returns a base address of the given address
@@ -236,6 +244,7 @@ public:
 	const HMODULE m_SecHost;
 	WIN32API_DEFINE_PROC(SetServiceStatus);
 	WIN32API_DEFINE_PROC(RegisterServiceCtrlHandlerW);
+	WIN32API_DEFINE_PROC(RegisterServiceCtrlHandlerExW);
 	WIN32API_DEFINE_PROC(OpenSCManagerW);
 	WIN32API_DEFINE_PROC(CreateServiceW);
 	WIN32API_DEFINE_PROC(CloseServiceHandle);
@@ -261,6 +270,7 @@ public:
 		m_SecHost(LoadLibraryExW(L"SECHOST.dll", NULL, NULL)),
 		WIN32API_INIT_PROC(m_SecHost, SetServiceStatus),
 		WIN32API_INIT_PROC(m_SecHost, RegisterServiceCtrlHandlerW),
+		WIN32API_INIT_PROC(m_SecHost, RegisterServiceCtrlHandlerExW),
 		WIN32API_INIT_PROC(m_SecHost, OpenSCManagerW),
 		WIN32API_INIT_PROC(m_SecHost, CreateServiceW),
 		WIN32API_INIT_PROC(m_SecHost, CloseServiceHandle),

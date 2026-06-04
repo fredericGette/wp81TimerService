@@ -104,13 +104,20 @@ void ReportStatus(DWORD currentState, DWORD waitHint = 0)
 }
 
 // ── Service control handler ───────────────────────────────────────────────────
-VOID WINAPI ServiceCtrlHandler(DWORD ctrl)
+DWORD WINAPI ServiceCtrlHandlerEx(DWORD ctrl, DWORD eventType, LPVOID /*eventData*/, LPVOID /*ctx*/)
 {
 	if (ctrl == SERVICE_CONTROL_STOP || ctrl == SERVICE_CONTROL_SHUTDOWN) {
 		EtwLogger::LogEvent(TRACE_LEVEL_INFORMATION, L"Service stop requested.");
 		ReportStatus(SERVICE_STOP_PENDING, 5000);
 		SetEvent(g_StopEvent);
 	}
+	else if (ctrl == SERVICE_CONTROL_POWEREVENT) {
+		if (eventType == PBT_APMSUSPEND)
+			EtwLogger::LogEvent(TRACE_LEVEL_INFORMATION, L"System going to sleep.");
+		else if (eventType == PBT_APMRESUMEAUTOMATIC || eventType == PBT_APMRESUMESUSPEND)
+			EtwLogger::LogEvent(TRACE_LEVEL_INFORMATION, L"System resumed from sleep.");
+	}
+	return NO_ERROR;
 }
 
 // ── Main service logic ────────────────────────────────────────────────────────
@@ -118,11 +125,11 @@ VOID WINAPI ServiceMain(DWORD /*argc*/, LPWSTR* /*argv*/)
 {
 	EtwLogger::Init(kProviderGuid);
 
-	g_StatusHandle = api.RegisterServiceCtrlHandlerW(SERVICE_NAME, ServiceCtrlHandler);
+	g_StatusHandle = api.RegisterServiceCtrlHandlerExW(SERVICE_NAME, ServiceCtrlHandlerEx, nullptr);
 	if (!g_StatusHandle) return;
 
 	g_Status.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
-	g_Status.dwControlsAccepted = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN;
+	g_Status.dwControlsAccepted = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN | SERVICE_ACCEPT_POWEREVENT;
 	g_Status.dwCurrentState = SERVICE_START_PENDING;
 	api.SetServiceStatus(g_StatusHandle, &g_Status);
 
@@ -228,7 +235,7 @@ int wmain(int argc, wchar_t* argv[])
 	}
 
 	// No arguments → hand control to the SCM
-	static SERVICE_TABLE_ENTRYW table[] = {
+	SERVICE_TABLE_ENTRYW table[] = {
 		{ const_cast<wchar_t*>(SERVICE_NAME), ServiceMain },
 		{ nullptr, nullptr }
 	};
