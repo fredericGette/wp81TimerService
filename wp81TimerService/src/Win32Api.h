@@ -1,7 +1,5 @@
 #pragma once
 
-#define _countof(_Array) (sizeof(_Array) / sizeof(_Array[0]))
-
 typedef struct _SERVICE_STATUS {
 	DWORD   dwServiceType;
 	DWORD   dwCurrentState;
@@ -47,6 +45,7 @@ typedef struct _PROCESS_INFORMATION {
 } PROCESS_INFORMATION, *PPROCESS_INFORMATION, *LPPROCESS_INFORMATION;
 
 #define STARTF_USESHOWWINDOW       0x00000001
+#define STARTF_USESTDHANDLES       0x00000100
 
 #define SERVICE_QUERY_CONFIG           0x0001
 #define SERVICE_CHANGE_CONFIG          0x0002
@@ -147,6 +146,8 @@ typedef struct _PROCESS_INFORMATION {
 
 DECLARE_HANDLE(SC_HANDLE);
 
+#define HANDLE_FLAG_INHERIT 0x00000001
+
 typedef VOID(WINAPI *LPSERVICE_MAIN_FUNCTIONW)(
 	DWORD   dwNumServicesArgs,
 	LPWSTR  *lpServiceArgVectors
@@ -195,6 +196,10 @@ extern "C" {
 	WINADVAPI BOOL WINAPI DeleteService(SC_HANDLE hService);
 	WINADVAPI BOOL WINAPI StartServiceCtrlDispatcherW(SERVICE_TABLE_ENTRYW *lpServiceStartTable);
 	WINBASEAPI VOID WINAPI Sleep(DWORD dwMilliseconds);
+	WINBASEAPI HANDLE WINAPI CreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile);
+	WINBASEAPI BOOL WINAPI GetExitCodeProcess(HANDLE hProcess, LPDWORD lpExitCode);
+	WINBASEAPI BOOL WINAPI CreatePipe(PHANDLE hReadPipe, PHANDLE hWritePipe, LPSECURITY_ATTRIBUTES lpPipeAttributes, DWORD nSize);
+	WINBASEAPI BOOL WINAPI SetHandleInformation(HANDLE hObject, DWORD dwMask, DWORD dwFlags);
 }
 
 #define WIN32API_TOSTRING(x) #x
