@@ -1,7 +1,5 @@
 #pragma once
 
-#define _countof(_Array) (sizeof(_Array) / sizeof(_Array[0]))
-
 typedef struct _SERVICE_STATUS {
 	DWORD   dwServiceType;
 	DWORD   dwCurrentState;
@@ -47,6 +45,7 @@ typedef struct _PROCESS_INFORMATION {
 } PROCESS_INFORMATION, *PPROCESS_INFORMATION, *LPPROCESS_INFORMATION;
 
 #define STARTF_USESHOWWINDOW       0x00000001
+#define STARTF_USESTDHANDLES       0x00000100
 
 #define SERVICE_QUERY_CONFIG           0x0001
 #define SERVICE_CHANGE_CONFIG          0x0002
@@ -147,6 +146,8 @@ typedef struct _PROCESS_INFORMATION {
 
 DECLARE_HANDLE(SC_HANDLE);
 
+#define HANDLE_FLAG_INHERIT 0x00000001
+
 typedef VOID(WINAPI *LPSERVICE_MAIN_FUNCTIONW)(
 	DWORD   dwNumServicesArgs,
 	LPWSTR  *lpServiceArgVectors
@@ -165,6 +166,13 @@ typedef VOID(WINAPI *LPHANDLER_FUNCTION)(
 	DWORD    dwControl
 	);
 
+typedef DWORD(WINAPI *LPHANDLER_FUNCTION_EX)(
+	DWORD   dwControl,
+	DWORD   dwEventType,
+	LPVOID  lpEventData,
+	LPVOID  lpContext
+	);
+
 extern "C" {
 	WINBASEAPI HMODULE WINAPI LoadLibraryExW(LPCWSTR lpLibFileName, HANDLE hFile, DWORD dwFlags);
 	WINBASEAPI HMODULE WINAPI GetModuleHandleW(LPCWSTR lpModuleName);
@@ -176,6 +184,7 @@ extern "C" {
 	WINBASEAPI BOOL WINAPI TerminateProcess(HANDLE hProcess, UINT uExitCode);
 	WINADVAPI BOOL WINAPI SetServiceStatus(SERVICE_STATUS_HANDLE hServiceStatus, LPSERVICE_STATUS lpServiceStatus);
 	WINADVAPI SERVICE_STATUS_HANDLE WINAPI RegisterServiceCtrlHandlerW(LPCWSTR lpServiceName, LPHANDLER_FUNCTION lpHandlerProc);
+	WINADVAPI SERVICE_STATUS_HANDLE WINAPI RegisterServiceCtrlHandlerExW(LPCWSTR lpServiceName, LPHANDLER_FUNCTION_EX lpHandlerProc, LPVOID lpContext);
 	WINBASEAPI HANDLE WINAPI CreateEventW(LPSECURITY_ATTRIBUTES lpEventAttributes, BOOL bManualReset, BOOL bInitialState, LPCWSTR lpName);
 	WINBASEAPI DWORD WINAPI GetModuleFileNameW(HMODULE hModule, LPWSTR lpFilename, DWORD nSize);
 	WINADVAPI SC_HANDLE WINAPI OpenSCManagerW(LPCWSTR lpMachineName, LPCWSTR lpDatabaseName, DWORD dwDesiredAccess);
@@ -187,6 +196,10 @@ extern "C" {
 	WINADVAPI BOOL WINAPI DeleteService(SC_HANDLE hService);
 	WINADVAPI BOOL WINAPI StartServiceCtrlDispatcherW(SERVICE_TABLE_ENTRYW *lpServiceStartTable);
 	WINBASEAPI VOID WINAPI Sleep(DWORD dwMilliseconds);
+	WINBASEAPI HANDLE WINAPI CreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile);
+	WINBASEAPI BOOL WINAPI GetExitCodeProcess(HANDLE hProcess, LPDWORD lpExitCode);
+	WINBASEAPI BOOL WINAPI CreatePipe(PHANDLE hReadPipe, PHANDLE hWritePipe, LPSECURITY_ATTRIBUTES lpPipeAttributes, DWORD nSize);
+	WINBASEAPI BOOL WINAPI SetHandleInformation(HANDLE hObject, DWORD dwMask, DWORD dwFlags);
 }
 
 #define WIN32API_TOSTRING(x) #x
@@ -204,7 +217,7 @@ class Win32Api {
 private:
 	// Returns a base address of KernelBase.dll
 	static HMODULE GetKernelBase() {
-		return GetBaseAddress(&::DisableThreadLibraryCalls);
+		return GetBaseAddress(reinterpret_cast<void*>(&::DisableThreadLibraryCalls));
 	}
 
 	// Returns a base address of the given address
@@ -236,6 +249,7 @@ public:
 	const HMODULE m_SecHost;
 	WIN32API_DEFINE_PROC(SetServiceStatus);
 	WIN32API_DEFINE_PROC(RegisterServiceCtrlHandlerW);
+	WIN32API_DEFINE_PROC(RegisterServiceCtrlHandlerExW);
 	WIN32API_DEFINE_PROC(OpenSCManagerW);
 	WIN32API_DEFINE_PROC(CreateServiceW);
 	WIN32API_DEFINE_PROC(CloseServiceHandle);
@@ -261,6 +275,7 @@ public:
 		m_SecHost(LoadLibraryExW(L"SECHOST.dll", NULL, NULL)),
 		WIN32API_INIT_PROC(m_SecHost, SetServiceStatus),
 		WIN32API_INIT_PROC(m_SecHost, RegisterServiceCtrlHandlerW),
+		WIN32API_INIT_PROC(m_SecHost, RegisterServiceCtrlHandlerExW),
 		WIN32API_INIT_PROC(m_SecHost, OpenSCManagerW),
 		WIN32API_INIT_PROC(m_SecHost, CreateServiceW),
 		WIN32API_INIT_PROC(m_SecHost, CloseServiceHandle),

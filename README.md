@@ -1,15 +1,16 @@
 # wp81TimerService
 
-A lightweight Win32 service for **Windows Phone 8.1** that executes a configurable command on a fixed 5-minute interval.
+A lightweight Win32 service for **Windows Phone 8.1** that executes a configurable command on a fixed interval (default: 5 minutes).
 
 ---
 
 ## Features
 
-- Runs any script or executable every 5 minutes
-- Task command configurable at runtime via the registry — no recompilation needed
-- Kills hung child processes automatically (enforces a 4-minute deadline)
-- ETW-based structured logging
+- Runs any script or executable on a configurable interval (default 5 minutes, minimum 1 minute)
+- Task command and interval configurable at runtime via the registry — no recompilation needed
+- Kills hung child processes automatically before the next interval begins
+- Captures stdout/stderr from the task and writes them to the log file
+- File-based structured logging (disabled by default; enabled via registry)
 
 ---
 
@@ -28,6 +29,20 @@ wp81TimerService.exe install
 ```bat
 reg add "HKLM\SYSTEM\CurrentControlSet\Services\wp81TimerService\Parameters" ^
     /v TaskCommand /t REG_SZ /d "C:\Scripts\mytask.bat" /f
+```
+
+**Set the timer interval** (optional — default is 5 minutes, minimum is 1 minute):
+
+```bat
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\wp81TimerService\Parameters" ^
+    /v IntervalMinutes /t REG_DWORD /d 10 /f
+```
+
+**Enable file logging** (disabled by default):
+
+```bat
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\wp81TimerService\Parameters" ^
+    /v LogFile /t REG_SZ /d "C:\Logs\wp81TimerService.log" /f
 ```
 
 **Start the service:**
@@ -49,25 +64,25 @@ wp81TimerService.exe uninstall
 
 | Setting | Default | How to change |
 |---|---|---|
-| Task command | `C:\Scripts\mytask.bat` | Registry key `TaskCommand` under `...\Services\wp81TimerService\Parameters` |
+| Task command | `ping -n 1 -w 1000 192.168.1.1` | Registry value `TaskCommand` (REG_SZ) under `...\Services\wp81TimerService\Parameters` |
+| Timer interval | 5 minutes | Registry value `IntervalMinutes` (REG_DWORD) under `...\Services\wp81TimerService\Parameters` — minimum 1 |
+| Log file path | *(disabled)* | Registry value `LogFile` (REG_SZ) under `...\Services\wp81TimerService\Parameters` |
 
-The service reads the registry key on every invocation of the task, so changes take effect at the next scheduled run without restarting the service.
+`TaskCommand` and `LogFile` are read on every invocation of the task, so changes take effect at the next scheduled run without restarting the service. `IntervalMinutes` is read once at service start; restart the service to apply a new interval.
 
 ---
 
-## ETW Logging
+## Logging
 
-The service registers an ETW provider with GUID:
+When a `LogFile` registry value is set, the service appends UTF-8 lines in the format:
 
 ```
-{1f5d7938-0031-43cc-a059-1f691396d6de}
+YYYY-MM-DD HH:MM [LEVEL] message
 ```
 
-Capture a real-time trace with [wp81debug](https://github.com/fredericGette/wp81debug):
+Log levels: `CRIT`, `ERROR`, `WARN`, `INFO`, `VERB`.
 
-```bat
-wp81debug etw {1f5d7938-0031-43cc-a059-1f691396d6de}
-```
+stdout and stderr from the child process are captured after it exits and logged as `[stdout]` / `[stderr]` lines at INFO / ERROR level respectively.
 
 ---
 
