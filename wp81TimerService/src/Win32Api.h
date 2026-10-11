@@ -200,6 +200,7 @@ extern "C" {
 	WINBASEAPI BOOL WINAPI GetExitCodeProcess(HANDLE hProcess, LPDWORD lpExitCode);
 	WINBASEAPI BOOL WINAPI CreatePipe(PHANDLE hReadPipe, PHANDLE hWritePipe, LPSECURITY_ATTRIBUTES lpPipeAttributes, DWORD nSize);
 	WINBASEAPI BOOL WINAPI SetHandleInformation(HANDLE hObject, DWORD dwMask, DWORD dwFlags);
+	WINBASEAPI BOOL WINAPI PeekNamedPipe(HANDLE hNamedPipe, LPVOID lpBuffer, DWORD nBufferSize, LPDWORD lpBytesRead, LPDWORD lpTotalBytesAvail, LPDWORD lpBytesLeftThisMessage);
 }
 
 #define WIN32API_TOSTRING(x) #x
@@ -246,6 +247,7 @@ public:
 	WIN32API_DEFINE_PROC(CreateEventW);
 	WIN32API_DEFINE_PROC(GetModuleFileNameW);
 	WIN32API_DEFINE_PROC(Sleep);
+	WIN32API_DEFINE_PROC(PeekNamedPipe);
 	const HMODULE m_SecHost;
 	WIN32API_DEFINE_PROC(SetServiceStatus);
 	WIN32API_DEFINE_PROC(RegisterServiceCtrlHandlerW);
@@ -272,6 +274,7 @@ public:
 		WIN32API_INIT_PROC(m_Kernelbase, CreateEventW),
 		WIN32API_INIT_PROC(m_Kernelbase, GetModuleFileNameW),
 		WIN32API_INIT_PROC(m_Kernelbase, Sleep),
+		WIN32API_INIT_PROC(m_Kernelbase, PeekNamedPipe),
 		m_SecHost(LoadLibraryExW(L"SECHOST.dll", NULL, NULL)),
 		WIN32API_INIT_PROC(m_SecHost, SetServiceStatus),
 		WIN32API_INIT_PROC(m_SecHost, RegisterServiceCtrlHandlerW),

@@ -174,15 +174,22 @@ bool GetTaskCommandFromRegistry(wchar_t* buf, DWORD bufChars)
     return ok;
 }
 
-// ── Helper: read all data from a pipe handle into a wstring ──────────────────
-static std::wstring ReadPipeToWString(HANDLE hPipe)
+// ── Helper: append whatever is currently in a pipe to a wstring ──────────────
+// Never blocks: only reads the bytes PeekNamedPipe reports as available.
+// The pipe must be drained while the child runs, otherwise the child blocks
+// as soon as the pipe buffer (~4 KB) is full and never exits.
+static void DrainPipe(HANDLE hPipe, std::wstring& result)
 {
-    std::wstring result;
-    char         buf[4096];
-    DWORD        bytesRead = 0;
+    char  buf[4096];
+    DWORD available = 0;
 
-    while (ReadFile(hPipe, buf, sizeof(buf), &bytesRead, nullptr) && bytesRead > 0)
+    while (api.PeekNamedPipe(hPipe, nullptr, 0, nullptr, &available, nullptr) && available > 0)
     {
+        DWORD toRead    = available < sizeof(buf) ? available : sizeof(buf);
+        DWORD bytesRead = 0;
+        if (!ReadFile(hPipe, buf, toRead, &bytesRead, nullptr) || bytesRead == 0)
+            break;
+
         // The child writes bytes; convert from current ANSI/UTF-8 to wide.
         int wlen = MultiByteToWideChar(CP_ACP, 0, buf, (int)bytesRead, nullptr, 0);
         if (wlen > 0)
@@ -192,8 +199,6 @@ static std::wstring ReadPipeToWString(HANDLE hPipe)
             result += chunk;
         }
     }
-
-    return result;
 }
 
 // ── Helper: log each non-empty line from a captured output block ──────────────
@@ -294,9 +299,24 @@ void RunTask()
         return;
     }
 
-    // ── Wait for the process ─────────────────────────────────────────────────
+    // ── Wait for the process, draining its output meanwhile ──────────────────
     DWORD processTimeout = g_IntervalMs > 60000 ? g_IntervalMs - 60000 : g_IntervalMs / 2;
-    DWORD waitResult = api.WaitForSingleObject(pi.hProcess, processTimeout);
+    ULONGLONG startTick  = GetTickCount64();
+    DWORD waitResult     = WAIT_TIMEOUT;
+    std::wstring stdoutText, stderrText;
+
+    for (;;)
+    {
+        DrainPipe(hStdoutRd, stdoutText);
+        DrainPipe(hStderrRd, stderrText);
+
+        waitResult = api.WaitForSingleObject(pi.hProcess, 100);
+        if (waitResult != WAIT_TIMEOUT)
+            break;
+        if (GetTickCount64() - startTick >= processTimeout)
+            break;
+    }
+
     if (waitResult == WAIT_TIMEOUT)
     {
         FileLogger::LogEvent(TRACE_LEVEL_WARNING, L"Task exceeded time limit - terminating process.");
@@ -316,11 +336,10 @@ void RunTask()
     CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
 
-    // ── Drain and log captured output ────────────────────────────────────────
-    // The child has exited (or been killed), so both pipe write ends are closed
-    // and ReadFile will return all buffered data then signal EOF cleanly.
-    std::wstring stdoutText = ReadPipeToWString(hStdoutRd);
-    std::wstring stderrText = ReadPipeToWString(hStderrRd);
+    // ── Drain remaining output and log it ────────────────────────────────────
+    // Non-blocking: a grandchild may still hold a write end open.
+    DrainPipe(hStdoutRd, stdoutText);
+    DrainPipe(hStderrRd, stderrText);
 
     CloseHandle(hStdoutRd);
     CloseHandle(hStderrRd);
